@@ -1,66 +1,49 @@
-Programme Batch — Bilan Annuel de Livret d'Épargne
-Projet COBOL de traitement batch simulant le bilan annuel d'un livret d'épargne bancaire.
+# Bilan annuel d'un livret d'épargne en COBOL
 
-Description
-Programme batch automatique qui lit un fichier de transactions séquentiel, traite les dépôts et retraits, calcule les intérêts annuels et génère un rapport de synthèse. Ce type de traitement est typique des jobs batch nocturnes en environnement bancaire.
+Projet pédagogique de traitement batch sous **GnuCOBOL**. Le programme lit un fichier de transactions, contrôle les dépôts et retraits, calcule des intérêts simples sur le solde final et affiche un rapport de synthèse. Il ne se connecte pas à un mainframe, à DB2 ou à un système bancaire réel.
 
-Fonctionnalités
-Lecture séquentielle d'un fichier de transactions
-Traitement des dépôts (type D) et retraits (type R)
-Contrôle métier : vérification du solde avant retrait
-Calcul automatique des intérêts annuels (taux paramétrable, défaut 3%)
-Génération d'un rapport de synthèse complet
-Gestion des erreurs (FILE-STATUS, transactions invalides)
-Structure du fichier d'entrée
-Le fichier LIVRET est un fichier séquentiel (LINE SEQUENTIAL) avec le format suivant :
+## Démarrer
 
-Type (1 car)  Montant (6 entiers + 2 décimales)
-D             001000.00   → Dépôt de 1 000,00 €
-R             000500.00   → Retrait de 500,00 €
-Exemple de sortie
-===============================================
-    GESTION DU LIVRET D'EPARGNE - 2024
-===============================================
+Prérequis : GnuCOBOL 3.x (`cobc`) et un terminal Linux, WSL ou équivalent.
 
-DEPOT   :   1000.00 € - Nouveau solde:   1000.00 €
-RETRAIT :    500.00 € - Nouveau solde:    500.00 €
+```sh
+cobc -x -Wall livret-epargne.cob -o livret-epargne
+./livret-epargne
+```
 
-===============================================
-           RESUME ANNUEL DU LIVRET
-===============================================
-Solde initial           :        .00 €
-Nombre de transactions  : 2
+Le fichier `LIVRET` fourni contient dix transactions d'exemple. Le programme le lit dans le répertoire courant, sans le modifier. Pour appliquer un autre taux annuel, passer un pourcentage de 0 à 100 en argument :
 
-Total des dépôts        :   1000.00 €
-Total des retraits      :    500.00 €
+```sh
+./livret-epargne 2.5
+```
 
-Solde avant intérêts    :    500.00 €
-Intérêts gagnés (3%)    :     15.00 €
-Solde après intérêts    :    515.00 €
-===============================================
-Prérequis
-GnuCOBOL 3.x
-WSL2 Debian ou Linux
-Installation
-bash
-sudo apt update
-sudo apt install gnucobol
-Compilation et exécution
-bash
-cobc -x LIVRET-EPARGNE.cbl -o livret
-./livret
-Environnement de développement
-OS : WSL2 Debian
-Compilateur : GnuCOBOL 3.x
-IDE : Visual Studio Code + COBOL Language Support
-Versionning : Git / GitHub
-Compétences démontrées
-Traitement séquentiel de fichiers COBOL
-Gestion de boucles avec PERFORM UNTIL
-Logique métier bancaire (validation solde, calcul intérêts)
-Formatage de l'affichage avec zones éditées (PIC Z)
-Gestion des erreurs FILE-STATUS
-Structure modulaire avec paragraphes COBOL
-Auteur
-Fu Yang — Projet pédagogique d'apprentissage des technologies mainframe COBOL.
+Sans argument, le taux est **3 %**. Les intérêts sont arrondis au centime.
 
+## Format du fichier `LIVRET`
+
+Une transaction par ligne, sans espace :
+
+```text
+D001000.00
+R000500.00
+```
+
+`D` signifie dépôt et `R` retrait. Le montant contient six chiffres pour les euros, un point et deux chiffres pour les centimes. Le format compact historique `D00100000` est aussi accepté ; les huit chiffres représentent alors des centimes. Les montants nuls, les types inconnus, les lignes mal formées et les retraits supérieurs au solde sont rejetés et comptés. Le solde initial est fixé à zéro à chaque exécution.
+
+Le rapport est écrit dans la sortie standard. Le fichier d'entrée n'est jamais modifié et aucun nouveau solde n'est enregistré : chaque exécution recalcule le bilan à partir de `LIVRET`.
+
+## Exemple vérifié
+
+Avec le fichier fourni : 10 opérations acceptées, 2 125,00 EUR de dépôts, 380,00 EUR de retraits, 1 745,00 EUR avant intérêts, 52,35 EUR d'intérêts à 3 %, soit **1 797,35 EUR** après intérêts.
+
+## Vérifier
+
+```sh
+./test-livret.sh
+```
+
+Le script compile dans un dossier temporaire et vérifie le fichier d'exemple, le format décimal, un taux personnalisé, les transactions rejetées, un fichier vide, un fichier absent et un taux invalide. Il ne modifie pas `LIVRET`.
+
+## Portée
+
+Cette simulation illustre les fichiers séquentiels, les contrôles métier et les calculs décimaux en COBOL. Elle ne gère ni persistance du solde, ni comptes multiples, ni authentification, ni traitement bancaire de production.

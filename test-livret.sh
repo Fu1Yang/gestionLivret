@@ -1,69 +1,54 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -euo pipefail
 
-# Script de test pour le programme de gestion du livret d'épargne
-echo "=========================================="
-echo "  TEST DU PROGRAMME LIVRET D'EPARGNE"
-echo "=========================================="
+repo_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+test_dir="$(mktemp -d)"
+trap 'rm -rf -- "$test_dir"' EXIT
 
-# Créer le fichier de transactions d'exemple
-echo "Création du fichier LIVRET avec transactions d'exemple..."
-cat > LIVRET << 'EOF'
-D00050000
-D00025000
-R00010000
-D00075000
-D00012500
-R00005000
-D00030000
-R00015000
-D00020000
-R00008000
+cobc -x -Wall "$repo_dir/livret-epargne.cob" -o "$test_dir/livret-epargne"
+
+assert_contains() {
+    local output="$1" expected="$2"
+    if [[ "$output" != *"$expected"* ]]; then
+        printf 'Résultat attendu absent : %s\n' "$expected" >&2
+        printf '%s\n' "$output" >&2
+        exit 1
+    fi
+}
+
+cp "$repo_dir/LIVRET" "$test_dir/LIVRET"
+sample_output="$(cd "$test_dir" && ./livret-epargne)"
+assert_contains "$sample_output" 'Operations acceptees    : 000010'
+assert_contains "$sample_output" 'Total des depots        : 2125.00 EUR'
+assert_contains "$sample_output" 'Total des retraits      : 380.00 EUR'
+assert_contains "$sample_output" 'Solde apres interets    : 1797.35 EUR'
+
+cat > "$test_dir/LIVRET" <<'EOF'
+D001000.00
+R000500.00
+R000600.00
+X000001.00
+D000000.00
 EOF
+custom_output="$(cd "$test_dir" && ./livret-epargne 2.5)"
+assert_contains "$custom_output" 'Operations acceptees    : 000002'
+assert_contains "$custom_output" 'Operations rejetees     : 000003'
+assert_contains "$custom_output" 'Interets (2.500%)         : 12.50 EUR'
+assert_contains "$custom_output" 'Solde apres interets    : 512.50 EUR'
 
-echo "Fichier LIVRET créé avec les transactions suivantes :"
-echo "D00050000  -> Dépôt de 500.00 €"
-echo "D00025000  -> Dépôt de 250.00 €"
-echo "R00010000  -> Retrait de 100.00 €"
-echo "D00075000  -> Dépôt de 750.00 €"
-echo "D00012500  -> Dépôt de 125.00 €"
-echo "R00005000  -> Retrait de 50.00 €"
-echo "D00030000  -> Dépôt de 300.00 €"
-echo "R00015000  -> Retrait de 150.00 €"
-echo "D00020000  -> Dépôt de 200.00 €"
-echo "R00008000  -> Retrait de 80.00 €"
-echo ""
+: > "$test_dir/LIVRET"
+empty_output="$(cd "$test_dir" && ./livret-epargne)"
+assert_contains "$empty_output" 'Solde apres interets    : 0.00 EUR'
 
-echo "Calculs attendus :"
-echo "Total dépôts  : 500 + 250 + 750 + 125 + 300 + 200 = 2125.00 €"
-echo "Total retraits: 100 + 50 + 150 + 80 = 380.00 €"
-echo "Solde final   : 2125 - 380 = 1745.00 €"
-echo "Intérêts 3%   : 1745 × 0.03 = 52.35 €"
-echo "Solde + int.  : 1745 + 52.35 = 1797.35 €"
-echo ""
-
-# Compilation
-echo "Compilation du programme..."
-if cobc -x livret-epargne.cob; then
-    echo "✓ Compilation réussie"
-    echo ""
-    
-    # Exécution
-    echo "=========================================="
-    echo "           EXECUTION DU PROGRAMME"
-    echo "=========================================="
-    ./livret-epargne
-    
-    echo ""
-    echo "=========================================="
-    echo "              VERIFICATION"
-    echo "=========================================="
-    echo "Vérifiez que les résultats correspondent aux calculs attendus ci-dessus."
-    
-else
-    echo "✗ Erreur de compilation"
-    echo "Vérifiez le code source pour les erreurs de syntaxe."
+if (cd "$test_dir" && ./livret-epargne invalid) >/dev/null 2>&1; then
+    printf 'Un taux invalide a été accepté.\n' >&2
+    exit 1
 fi
 
-echo ""
-echo "Pour nettoyer les fichiers générés :"
-echo "rm -f livret-epargne LIVRET"
+rm "$test_dir/LIVRET"
+if (cd "$test_dir" && ./livret-epargne) >/dev/null 2>&1; then
+    printf 'Un fichier LIVRET absent a été accepté.\n' >&2
+    exit 1
+fi
+
+printf 'Tous les scénarios du traitement batch sont validés.\n'

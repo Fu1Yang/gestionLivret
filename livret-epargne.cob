@@ -1,183 +1,197 @@
-       IDENTIFICATION DIVISION.
-       PROGRAM-ID. LIVRET-EPARGNE.
-       AUTHOR. STUDENT.
-       DATE-WRITTEN. 2024-09-24.
-       
-       ENVIRONMENT DIVISION.
-       INPUT-OUTPUT SECTION.
-       FILE-CONTROL.
-           SELECT F-LIVRET ASSIGN TO "LIVRET"
-              ORGANIZATION IS LINE SEQUENTIAL
-              FILE STATUS IS WS-FILE-STATUS.
-       
-       DATA DIVISION.
-       FILE SECTION.
-       FD F-LIVRET.
-       01 FS-TRANSACTION-RECORD.
-           05 TRANS-TYPE           PIC X(1).
-           05 TRANS-AMOUNT         PIC 9(6)V99.
-       
-       WORKING-STORAGE SECTION.
-       01 WS-FILE-STATUS           PIC X(02).
-       01 WS-EOF                   PIC X(01) VALUE "N".
-       
-      * Variables pour les calculs
-       01 WS-SOLDE-INITIAL         PIC 9(8)V99 VALUE ZERO.
-       01 WS-SOLDE-FINAL           PIC 9(8)V99 VALUE ZERO.
-       01 WS-TOTAL-DEPOTS          PIC 9(8)V99 VALUE ZERO.
-       01 WS-TOTAL-RETRAITS        PIC 9(8)V99 VALUE ZERO.
-       01 WS-MONTANT-INTERETS      PIC 9(8)V99 VALUE ZERO.
-       01 WS-SOLDE-AVEC-INTERETS   PIC 9(8)V99 VALUE ZERO.
-       01 WS-TAUX-INTERET          PIC 9V999 VALUE 0.030.
-       01 WS-COMPTEUR-TRANS        PIC 9(4) VALUE ZERO.
-       
-      * Variables pour l'affichage formaté
-       01 WS-DISPLAY-SOLDE-INITIAL     PIC Z(8).99.
-       01 WS-DISPLAY-SOLDE-FINAL       PIC Z(8).99.
-       01 WS-DISPLAY-TOTAL-DEPOTS      PIC Z(8).99.
-       01 WS-DISPLAY-TOTAL-RETRAITS    PIC Z(8).99.
-       01 WS-DISPLAY-INTERETS          PIC Z(8).99.
-       01 WS-DISPLAY-SOLDE-AVEC-INT    PIC Z(8).99.
-       01 WS-DISPLAY-TRANSACTION       PIC Z(6).99.
-       
-       PROCEDURE DIVISION.
-       MAIN-PROCESS.
-           DISPLAY "===============================================".
-           DISPLAY "    GESTION DU LIVRET D'EPARGNE - 2024".
-           DISPLAY "===============================================".
-           DISPLAY " ".
-           
-           PERFORM INIT-PROGRAMME
-           PERFORM TRAITER-FICHIER
-           PERFORM CALCULER-INTERETS
-           PERFORM AFFICHER-RESUME
-           PERFORM FIN-PROGRAMME
-           
-           STOP RUN.
-       
-       INIT-PROGRAMME.
-      *    Initialisation du solde initial (optionnel)
-           MOVE ZERO TO WS-SOLDE-INITIAL
-           MOVE WS-SOLDE-INITIAL TO WS-SOLDE-FINAL
-           
-           DISPLAY "Ouverture du fichier LIVRET...".
-           OPEN INPUT F-LIVRET
-           
-           IF WS-FILE-STATUS NOT = "00"
-              DISPLAY "ERREUR: Impossible d'ouvrir le fichier LIVRET"
-              DISPLAY "Status: " WS-FILE-STATUS
-              STOP RUN
-           END-IF
-           
-           DISPLAY "Fichier ouvert avec succès."
-           DISPLAY " ".
-           DISPLAY "Début du traitement des transactions...".
-           DISPLAY " ".
-       
-       TRAITER-FICHIER.
-           MOVE "N" TO WS-EOF
-           
-           PERFORM UNTIL WS-EOF = "Y"
-              READ F-LIVRET
-                 AT END
-                    MOVE "Y" TO WS-EOF
-                 NOT AT END
-                    PERFORM TRAITER-TRANSACTION
-              END-READ
-           END-PERFORM.
-       
-       TRAITER-TRANSACTION.
-           ADD 1 TO WS-COMPTEUR-TRANS
-           
-           EVALUATE TRANS-TYPE
-              WHEN "D"
-                 PERFORM TRAITER-DEPOT
-              WHEN "R"
-                 PERFORM TRAITER-RETRAIT
-              WHEN OTHER
-                 MOVE TRANS-AMOUNT TO WS-DISPLAY-TRANSACTION
-                 DISPLAY "ATTENTION: Transaction invalide ignorée - "
-                         "Type: " TRANS-TYPE 
-                         " Montant: " WS-DISPLAY-TRANSACTION " €"
-           END-EVALUATE.
-       
-       TRAITER-DEPOT.
-           ADD TRANS-AMOUNT TO WS-SOLDE-FINAL
-           ADD TRANS-AMOUNT TO WS-TOTAL-DEPOTS
-           
-           MOVE TRANS-AMOUNT TO WS-DISPLAY-TRANSACTION
-           DISPLAY "DEPOT   : " WS-DISPLAY-TRANSACTION " € - "
-                   "Nouveau solde: " WS-SOLDE-FINAL " €".
-       
-       TRAITER-RETRAIT.
-      *    Vérifier si le solde est suffisant
-           IF WS-SOLDE-FINAL >= TRANS-AMOUNT
-              SUBTRACT TRANS-AMOUNT FROM WS-SOLDE-FINAL
-              ADD TRANS-AMOUNT TO WS-TOTAL-RETRAITS
-              
-              MOVE TRANS-AMOUNT TO WS-DISPLAY-TRANSACTION
-              DISPLAY "RETRAIT : " WS-DISPLAY-TRANSACTION " € - "
-                      "Nouveau solde: " WS-SOLDE-FINAL " €"
-           ELSE
-              MOVE TRANS-AMOUNT TO WS-DISPLAY-TRANSACTION
-              DISPLAY "RETRAIT REFUSE: " WS-DISPLAY-TRANSACTION 
-              " € - Solde insuffisant (" WS-SOLDE-FINAL " €)"
-           END-IF.
-       
-       CALCULER-INTERETS.
-           DISPLAY " ".
-           DISPLAY "Calcul des intérêts annuels (3%)...".
-           
-      *    Calcul: Solde × Taux d'intérêt
-           COMPUTE WS-MONTANT-INTERETS = 
-                   WS-SOLDE-FINAL * WS-TAUX-INTERET
-           
-      *    Solde final avec intérêts
-           ADD WS-MONTANT-INTERETS TO WS-SOLDE-FINAL 
-                                   GIVING WS-SOLDE-AVEC-INTERETS.
-       
-       AFFICHER-RESUME.
-           DISPLAY " ".
-           DISPLAY "===============================================".
-           DISPLAY "           RESUME ANNUEL DU LIVRET".
-           DISPLAY "===============================================".
-           
-      *    Formatage pour l'affichage
-           MOVE WS-SOLDE-INITIAL TO WS-DISPLAY-SOLDE-INITIAL
-           MOVE WS-SOLDE-FINAL TO WS-DISPLAY-SOLDE-FINAL
-           MOVE WS-TOTAL-DEPOTS TO WS-DISPLAY-TOTAL-DEPOTS
-           MOVE WS-TOTAL-RETRAITS TO WS-DISPLAY-TOTAL-RETRAITS
-           MOVE WS-MONTANT-INTERETS TO WS-DISPLAY-INTERETS
-           MOVE WS-SOLDE-AVEC-INTERETS TO WS-DISPLAY-SOLDE-AVEC-INT
-           
-           DISPLAY "Solde initial           : " 
-                   WS-DISPLAY-SOLDE-INITIAL " €"
-           DISPLAY "Nombre de transactions  : " WS-COMPTEUR-TRANS
-           DISPLAY " "
-           DISPLAY "Total des dépôts        : " 
-                   WS-DISPLAY-TOTAL-DEPOTS " €"
-           DISPLAY "Total des retraits      : " 
-                   WS-DISPLAY-TOTAL-RETRAITS " €"
-           DISPLAY " "
-           DISPLAY "Solde avant intérêts    : " 
-                   WS-DISPLAY-SOLDE-FINAL " €"
-           DISPLAY "Intérêts gagnés (3%)    : " 
-                   WS-DISPLAY-INTERETS " €"
-           DISPLAY "Solde après intérêts    : " 
-                   WS-DISPLAY-SOLDE-AVEC-INT " €"
-           DISPLAY " "
-           DISPLAY "===============================================".
-       
-       FIN-PROGRAMME.
-           CLOSE F-LIVRET
-           
-           IF WS-FILE-STATUS NOT = "00"
-              DISPLAY "ATTENTION: Problème lors de la fermeture"
-              DISPLAY "Status: " WS-FILE-STATUS
-           ELSE
-              DISPLAY "Fichier fermé correctement."
-           END-IF
-           
-           DISPLAY "Fin du programme de gestion du livret.".
-           STOP RUN.
-           
+       >>SOURCE FORMAT FREE
+identification division.
+program-id. livret-epargne.
+
+environment division.
+input-output section.
+file-control.
+    select transactions-file assign to "LIVRET"
+        organization is line sequential
+        file status is ws-file-status.
+
+data division.
+file section.
+fd transactions-file.
+01 transaction-record pic x(256).
+
+working-storage section.
+01 ws-file-status pic xx.
+01 ws-end-of-file pic 9 value 0.
+01 ws-line-number pic 9(6) value 0.
+01 ws-valid-count pic 9(6) value 0.
+01 ws-rejected-count pic 9(6) value 0.
+01 ws-line-length binary-long.
+01 ws-raw-amount pic 9(8).
+01 ws-amount pic 9(6)v99.
+01 ws-balance pic 9(12)v99 value 0.
+01 ws-next-balance pic 9(12)v99 value 0.
+01 ws-total-deposits pic 9(12)v99 value 0.
+01 ws-total-withdrawals pic 9(12)v99 value 0.
+01 ws-interest pic 9(12)v99 value 0.
+01 ws-final-balance pic 9(12)v99 value 0.
+01 ws-rate pic 9v99999 value 0.03000.
+01 ws-rate-percent pic 999v999 value 3.
+01 ws-rate-argument pic x(32).
+01 ws-edit-amount pic z(5)9.99.
+01 ws-edit-balance pic z(11)9.99.
+01 ws-edit-total pic z(11)9.99.
+01 ws-edit-interest pic z(11)9.99.
+01 ws-edit-final pic z(11)9.99.
+01 ws-edit-rate pic zz9.999.
+01 ws-size-error pic 9 value 0.
+
+procedure division.
+main.
+    accept ws-rate-argument from command-line
+    if ws-rate-argument not = spaces
+        if function test-numval(ws-rate-argument) not = 0
+            or function numval(ws-rate-argument) < 0
+            or function numval(ws-rate-argument) > 100
+            display "ERREUR: Taux invalide (0 a 100 pour cent)."
+            move 1 to return-code
+            stop run
+        end-if
+        compute ws-rate-percent = function numval(ws-rate-argument)
+        compute ws-rate = ws-rate-percent / 100
+    end-if
+
+    open input transactions-file
+    if ws-file-status not = "00"
+        display "ERREUR: Impossible d'ouvrir LIVRET (statut "
+            ws-file-status ")."
+        move 1 to return-code
+        stop run
+    end-if
+
+    perform until ws-end-of-file = 1
+        read transactions-file
+            at end move 1 to ws-end-of-file
+            not at end perform process-transaction
+        end-read
+        if ws-file-status not = "00" and "10"
+            display "ERREUR: Lecture de LIVRET (statut "
+                ws-file-status ")."
+            close transactions-file
+            move 1 to return-code
+            stop run
+        end-if
+    end-perform
+
+    close transactions-file
+    if ws-file-status not = "00"
+        display "ERREUR: Fermeture de LIVRET (statut "
+            ws-file-status ")."
+        move 1 to return-code
+        stop run
+    end-if
+
+    compute ws-interest rounded = ws-balance * ws-rate
+    compute ws-final-balance = ws-balance + ws-interest
+        on size error
+            display "ERREUR: Depassement du solde final."
+            move 1 to return-code
+            stop run
+    end-compute
+    perform show-summary
+    move 0 to return-code
+    stop run.
+
+process-transaction.
+    add 1 to ws-line-number
+    compute ws-line-length =
+        function length(function trim(transaction-record trailing))
+
+    evaluate true
+        when ws-line-length = 9
+            if transaction-record(2:8) is not numeric
+                perform reject-line
+                exit paragraph
+            end-if
+            move transaction-record(2:8) to ws-raw-amount
+            compute ws-amount = ws-raw-amount / 100
+        when ws-line-length = 10
+            if transaction-record(2:6) is not numeric
+                or transaction-record(8:1) not = "."
+                or transaction-record(9:2) is not numeric
+                perform reject-line
+                exit paragraph
+            end-if
+            compute ws-amount =
+                function numval(transaction-record(2:9))
+        when other
+            perform reject-line
+            exit paragraph
+    end-evaluate
+
+    if ws-amount = 0
+        perform reject-line
+        exit paragraph
+    end-if
+
+    evaluate transaction-record(1:1)
+        when "D" perform process-deposit
+        when "R" perform process-withdrawal
+        when other perform reject-line
+    end-evaluate.
+
+process-deposit.
+    move 0 to ws-size-error
+    compute ws-next-balance = ws-balance + ws-amount
+        on size error move 1 to ws-size-error
+    end-compute
+    if ws-size-error = 1
+        perform reject-line
+        exit paragraph
+    end-if
+    move ws-next-balance to ws-balance
+    add ws-amount to ws-total-deposits
+    add 1 to ws-valid-count
+    move ws-amount to ws-edit-amount
+    move ws-balance to ws-edit-balance
+    display "DEPOT   : " function trim(ws-edit-amount)
+        " EUR - Nouveau solde: " function trim(ws-edit-balance)
+        " EUR".
+
+process-withdrawal.
+    if ws-amount > ws-balance
+        display "RETRAIT REFUSE ligne " ws-line-number
+            ": solde insuffisant."
+        add 1 to ws-rejected-count
+        exit paragraph
+    end-if
+    subtract ws-amount from ws-balance
+    add ws-amount to ws-total-withdrawals
+    add 1 to ws-valid-count
+    move ws-amount to ws-edit-amount
+    move ws-balance to ws-edit-balance
+    display "RETRAIT : " function trim(ws-edit-amount)
+        " EUR - Nouveau solde: " function trim(ws-edit-balance)
+        " EUR".
+
+reject-line.
+    display "TRANSACTION INVALIDE ligne " ws-line-number
+        ": " function trim(transaction-record trailing)
+    add 1 to ws-rejected-count.
+
+show-summary.
+    move ws-balance to ws-edit-balance
+    move ws-total-deposits to ws-edit-total
+    move ws-rate-percent to ws-edit-rate
+    display " "
+    display "RESUME ANNUEL DU LIVRET"
+    display "Lignes lues             : " ws-line-number
+    display "Operations acceptees    : " ws-valid-count
+    display "Operations rejetees     : " ws-rejected-count
+    display "Total des depots        : "
+        function trim(ws-edit-total) " EUR"
+    move ws-total-withdrawals to ws-edit-total
+    display "Total des retraits      : "
+        function trim(ws-edit-total) " EUR"
+    display "Solde avant interets    : "
+        function trim(ws-edit-balance) " EUR"
+    move ws-interest to ws-edit-interest
+    display "Interets (" function trim(ws-edit-rate)
+        "%)         : " function trim(ws-edit-interest) " EUR"
+    move ws-final-balance to ws-edit-final
+    display "Solde apres interets    : "
+        function trim(ws-edit-final) " EUR".
